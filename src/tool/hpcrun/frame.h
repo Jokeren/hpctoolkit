@@ -58,7 +58,10 @@
 // --------------------------------------------------------------------------
 
 typedef struct frame_t {
-  hpcrun_unw_cursor_t cursor;       // hold a copy of the cursor for this frame
+  //hpcrun_unw_cursor_t cursor;       // hold a copy of the cursor for this frame
+  uint64_t ip;
+  uint64_t sp;
+  void *pc_unnorm;
   lush_assoc_info_t as_info;
   ip_normalized_t ip_norm;
   ip_normalized_t the_function;     // enclosing function of ip_norm
@@ -71,7 +74,7 @@ static inline
 void*
 hpcrun_frame_get_unnorm(frame_t* frame)
 {
-  return frame->cursor.pc_unnorm;
+  return frame->pc_unnorm;
 }
 
 #endif // FRAME_H

@@ -108,8 +108,8 @@ hpcrun_bt_dump(frame_t* unwind, const char* tag)
       lush_assoc_info2str(as_str, sizeof(as_str), x->as_info);
       lush_lip2str(lip_str, sizeof(lip_str), x->lip);
 
-      void* ip;
-      hpcrun_unw_get_ip_unnorm_reg(&(x->cursor), &ip);
+      void* ip = x->pc_unnorm;
+      //hpcrun_unw_get_ip_unnorm_reg(&(x->cursor), &ip);
 
       load_module_t* lm = hpcrun_loadmap_findById(x->ip_norm.lm_id);
       const char* lm_name = (lm) ? lm->name : "(null)";
@@ -241,9 +241,9 @@ hpcrun_generate_backtrace_no_trampoline(backtrace_info_t* bt,
     
     hpcrun_ensure_btbuf_avail();
 
-    td->btbuf_cur->cursor = cursor;
+    //td->btbuf_cur->cursor = cursor;
     //Broken if HPC_UNW_LITE defined
-    hpcrun_unw_get_ip_norm_reg(&td->btbuf_cur->cursor,
+    hpcrun_unw_get_ip_norm_reg(&cursor,
 			       &td->btbuf_cur->ip_norm);
     td->btbuf_cur->ra_loc = NULL;
 

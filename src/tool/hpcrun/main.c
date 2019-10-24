@@ -818,6 +818,10 @@ hpcrun_wait()
 void*
 monitor_init_process(int *argc, char **argv, void* data)
 {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  double start_tv = tv.tv_usec + tv.tv_sec * 1000000;
+
   char* process_name;
   char  buf[PROC_NAME_LEN];
 
@@ -904,6 +908,10 @@ monitor_init_process(int *argc, char **argv, void* data)
 
   hpcrun_safe_exit();
 
+  gettimeofday(&tv, NULL);
+  double end_tv = tv.tv_usec + tv.tv_sec * 1000000;
+  printf("hpcrun initialization time %f\n", (end_tv - start_tv) / 1000000);
+
   return data;
 }
 
@@ -911,6 +919,10 @@ monitor_init_process(int *argc, char **argv, void* data)
 void
 monitor_fini_process(int how, void* data)
 {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  double start_tv = tv.tv_usec + tv.tv_sec * 1000000;
+
   if (hpcrun_get_disabled()) {
     return;
   }
@@ -920,6 +932,10 @@ monitor_fini_process(int how, void* data)
   hpcrun_fini_internal();
 
   hpcrun_safe_exit();
+
+  gettimeofday(&tv, NULL);
+  double end_tv = tv.tv_usec + tv.tv_sec * 1000000;
+  printf("hpcrun finalization time %f\n", (end_tv - start_tv) / 1000000);
 }
 
 

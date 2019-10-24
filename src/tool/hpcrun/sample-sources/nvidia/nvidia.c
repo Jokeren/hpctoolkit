@@ -832,6 +832,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 #undef cur_kind
 #undef cur_metrics
 
+#if 0
 #define cur_kind me_kind
 #define cur_metrics me_metric_id
 
@@ -844,7 +845,9 @@ METHOD_FN(process_event_list, int lush_metrics)
 
 #undef cur_kind
 #undef cur_metrics
+#endif
 
+#if 0
 #define cur_kind me_set_kind
 #define cur_metrics me_set_metric_id
 
@@ -857,6 +860,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 
 #undef cur_kind
 #undef cur_metrics
+#endif
 
 #define cur_kind ke_kind
 #define cur_metrics ke_metric_id
@@ -972,6 +976,11 @@ METHOD_FN(process_event_list, int lush_metrics)
 #ifndef HPCRUN_STATIC_LINK
   if (cuda_bind()) {
     EEMSG("hpcrun: unable to bind to NVIDIA CUDA library %s\n", dlerror());
+    monitor_real_exit(-1);
+  }
+
+  if (cudart_bind()) {
+    EEMSG("hpcrun: unable to bind to NVIDIA CUDA runtime library %s\n", dlerror());
     monitor_real_exit(-1);
   }
 

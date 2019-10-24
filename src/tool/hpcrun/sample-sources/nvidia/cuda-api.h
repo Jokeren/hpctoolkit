@@ -57,6 +57,9 @@
 #ifndef _HPCTOOLKIT_CUDA_API_H_
 #define _HPCTOOLKIT_CUDA_API_H_
 
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+
 //*****************************************************************************
 // interface operations
 //*****************************************************************************
@@ -84,6 +87,13 @@ cuda_bind
 );
 
 
+int 
+cudart_bind
+(
+ void
+);
+
+
 // returns 0 on success
 int 
 cuda_device_property_query
@@ -91,5 +101,52 @@ cuda_device_property_query
  int device_id, 
  cuda_device_property_t *property
 );
+
+
+cudaError_t
+real_cudaLaunchKernel(const void* func, dim3 gridDim, dim3 blockDim, void** args, size_t sharedMem, cudaStream_t stream);
+
+cudaError_t
+real_cudaMemcpy(void* dst, const void* src, size_t count, enum cudaMemcpyKind kind);
+
+CUresult
+real_cuLaunchKernel(
+  CUfunction f,
+  unsigned int gridDimX,
+  unsigned int gridDimY,
+  unsigned int gridDimZ,
+  unsigned int blockDimX,
+  unsigned int blockDimY,
+  unsigned int blockDimZ,
+  unsigned int sharedMemBytes,
+  CUstream hStream,
+  void** kernelParams,
+  void** extra
+);
+
+CUresult
+real_cuMemcpy(CUdeviceptr dst, CUdeviceptr src, size_t ByteCount);
+
+CUresult
+real_cuMemcpyDtoH
+(
+ void* dstHost,
+ CUdeviceptr srcDevice,
+ size_t ByteCount
+); 
+
+CUresult
+real_cuMemcpyHtoD (
+  CUdeviceptr dstDevice,
+  const void* srcHost,
+  size_t ByteCount
+ ); 
+
+CUresult
+real_cuMemcpyDtoD(
+  CUdeviceptr dstDevice,
+  CUdeviceptr srcDevice,
+  size_t ByteCount
+); 
 
 #endif

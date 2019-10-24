@@ -246,6 +246,7 @@ cupti_correlation_callback_dummy
 //******************************************************************************
 
 static atomic_long cupti_correlation_id = ATOMIC_VAR_INIT(0x8000000000000001);
+static atomic_long cupti_calls = ATOMIC_VAR_INIT(0);
 
 static spinlock_t files_lock = SPINLOCK_UNLOCKED;
 
@@ -758,6 +759,241 @@ cupti_func_ip_resolve
 }
 
 
+cudaError_t 
+cudaLaunchKernel_ptsz(const void* func, dim3 gridDim, dim3 blockDim, void** args, size_t sharedMem, cudaStream_t stream)
+{
+  cupti_runtime_api_flag_set();
+  uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+  cupti_correlation_id_push(correlation_id);
+  hpcrun_metricVal_t zero_metric_incr = {.i = 0};
+  int zero_metric_id = 0; // nothing to see here
+  ucontext_t uc;
+  getcontext(&uc);
+
+  // NOTE(keren): hpcrun_safe_enter prevent self interruption
+  //hpcrun_safe_enter();
+
+  //cct_node_t *node =
+  //  hpcrun_sample_callpath(&uc, zero_metric_id,
+  //    zero_metric_incr, 0, 1, NULL).sample_node;
+
+  //hpcrun_safe_exit();
+  //atomic_fetch_add(&cupti_calls, 1);
+  //cct_node_t *api_node = cupti_correlation_callback(correlation_id);
+  //cct_node_t *api_node = node;
+  cudaError_t error = real_cudaLaunchKernel(func, gridDim, blockDim, args, sharedMem, stream);
+  cupti_correlation_id_pop();
+  cupti_runtime_api_flag_unset();
+  return error;
+}
+
+cudaError_t
+cudaMemcpy(void* dst, const void* src, size_t count, enum cudaMemcpyKind kind)
+{
+  cupti_runtime_api_flag_set();
+  uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+  cupti_correlation_id_push(correlation_id);
+  hpcrun_metricVal_t zero_metric_incr = {.i = 0};
+  int zero_metric_id = 0; // nothing to see here
+  ucontext_t uc;
+  getcontext(&uc);
+
+  // NOTE(keren): hpcrun_safe_enter prevent self interruption
+  //hpcrun_safe_enter();
+
+  //cct_node_t *node =
+  //  hpcrun_sample_callpath(&uc, zero_metric_id,
+  //    zero_metric_incr, 0, 1, NULL).sample_node;
+
+  //hpcrun_safe_exit();
+  //atomic_fetch_add(&cupti_calls, 1);
+  //cct_node_t *api_node = cupti_correlation_callback(correlation_id);
+  //cct_node_t *api_node = node;
+  cudaError_t error = real_cudaMemcpy(dst, src, count, kind);
+  cupti_correlation_id_pop();
+  cupti_runtime_api_flag_unset();
+  return error;
+}
+
+CUresult
+cuLaunchKernel(
+  CUfunction f,
+  unsigned int gridDimX,
+  unsigned int gridDimY,
+  unsigned int gridDimZ,
+  unsigned int blockDimX,
+  unsigned int blockDimY,
+  unsigned int blockDimZ,
+  unsigned int sharedMemBytes,
+  CUstream hStream,
+  void** kernelParams,
+  void** extra
+)
+{
+  if (!cupti_runtime_api_flag) {
+    uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+    cupti_correlation_id_push(correlation_id);
+    //atomic_fetch_add(&cupti_calls, 1);
+    hpcrun_metricVal_t zero_metric_incr = {.i = 0};
+    int zero_metric_id = 0; // nothing to see here
+    ucontext_t uc;
+    getcontext(&uc);
+
+    // NOTE(keren): hpcrun_safe_enter prevent self interruption
+    //hpcrun_safe_enter();
+
+    //cct_node_t *node =
+    //  hpcrun_sample_callpath(&uc, zero_metric_id,
+    //    zero_metric_incr, 0, 1, NULL).sample_node;
+
+    //cct_node_t *api_node = node;
+    hpcrun_safe_exit();
+  }
+  //cct_node_t *api_node = cupti_correlation_callback(correlation_id);
+  cudaError_t error = real_cuLaunchKernel(f, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ, sharedMemBytes, hStream, kernelParams, extra);
+  if (!cupti_runtime_api_flag) {
+    cupti_correlation_id_pop();
+  }
+  return error;
+}
+
+
+CUresult
+cuMemcpy(CUdeviceptr dst, CUdeviceptr src, size_t ByteCount)
+{
+  if (!cupti_runtime_api_flag) {
+    uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+    cupti_correlation_id_push(correlation_id);
+    //atomic_fetch_add(&cupti_calls, 1);
+    hpcrun_metricVal_t zero_metric_incr = {.i = 0};
+    int zero_metric_id = 0; // nothing to see here
+    ucontext_t uc;
+    getcontext(&uc);
+
+    // NOTE(keren): hpcrun_safe_enter prevent self interruption
+    //hpcrun_safe_enter();
+
+    //cct_node_t *node =
+    //  hpcrun_sample_callpath(&uc, zero_metric_id,
+    //    zero_metric_incr, 0, 1, NULL).sample_node;
+
+    //cct_node_t *api_node = node;
+    hpcrun_safe_exit();
+  }
+  //cct_node_t *api_node = cupti_correlation_callback(correlation_id);
+  cudaError_t error = real_cuMemcpy(dst, src, ByteCount);
+  if (!cupti_runtime_api_flag) {
+    cupti_correlation_id_pop();
+  }
+  return error;
+}
+
+
+CUresult
+cuMemcpyDtoD (
+  CUdeviceptr dstDevice,
+  CUdeviceptr srcDevice,
+  size_t ByteCount
+) 
+{
+  if (!cupti_runtime_api_flag) {
+    uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+    cupti_correlation_id_push(correlation_id);
+    //atomic_fetch_add(&cupti_calls, 1);
+    hpcrun_metricVal_t zero_metric_incr = {.i = 0};
+    int zero_metric_id = 0; // nothing to see here
+    ucontext_t uc;
+    getcontext(&uc);
+
+    // NOTE(keren): hpcrun_safe_enter prevent self interruption
+    //hpcrun_safe_enter();
+
+    //cct_node_t *node =
+    //  hpcrun_sample_callpath(&uc, zero_metric_id,
+    //    zero_metric_incr, 0, 1, NULL).sample_node;
+
+    //cct_node_t *api_node = node;
+    hpcrun_safe_exit();
+  }
+  //cct_node_t *api_node = cupti_correlation_callback(correlation_id);
+  cudaError_t error = real_cuMemcpyDtoD(dstDevice, srcDevice, ByteCount); 
+  if (!cupti_runtime_api_flag) {
+    cupti_correlation_id_pop();
+  }
+  return error;
+}
+
+
+CUresult
+cuMemcpyHtoD (
+  CUdeviceptr dstDevice,
+  const void* srcHost,
+  size_t ByteCount
+ ) 
+{
+  if (!cupti_runtime_api_flag) {
+    uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+    cupti_correlation_id_push(correlation_id);
+    hpcrun_metricVal_t zero_metric_incr = {.i = 0};
+    int zero_metric_id = 0; // nothing to see here
+    ucontext_t uc;
+    getcontext(&uc);
+
+    // NOTE(keren): hpcrun_safe_enter prevent self interruption
+    //hpcrun_safe_enter();
+
+    //cct_node_t *node =
+    //  hpcrun_sample_callpath(&uc, zero_metric_id,
+    //    zero_metric_incr, 0, 1, NULL).sample_node;
+
+    //cct_node_t *api_node = node;
+    hpcrun_safe_exit();
+  }
+  //cct_node_t *api_node = cupti_correlation_callback(correlation_id);
+  cudaError_t error = real_cuMemcpyHtoD(dstDevice, srcHost, ByteCount); 
+  if (!cupti_runtime_api_flag) {
+    //atomic_fetch_add(&cupti_calls, 1);
+    cupti_correlation_id_pop();
+  }
+  return error;
+}
+
+
+CUresult
+cuMemcpyDtoH
+(
+ void* dstHost,
+ CUdeviceptr srcDevice,
+ size_t ByteCount
+) 
+{
+  if (!cupti_runtime_api_flag) {
+    uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+    cupti_correlation_id_push(correlation_id);
+    hpcrun_metricVal_t zero_metric_incr = {.i = 0};
+    int zero_metric_id = 0; // nothing to see here
+    ucontext_t uc;
+    getcontext(&uc);
+
+    // NOTE(keren): hpcrun_safe_enter prevent self interruption
+    //hpcrun_safe_enter();
+
+    //cct_node_t *node =
+    //  hpcrun_sample_callpath(&uc, zero_metric_id,
+    //    zero_metric_incr, 0, 1, NULL).sample_node;
+
+    //cct_node_t *api_node = node;
+    hpcrun_safe_exit();
+    //atomic_fetch_add(&cupti_calls, 1);
+  }
+  //cct_node_t *api_node = cupti_correlation_callback(correlation_id);
+  cudaError_t error = real_cuMemcpyDtoH(dstHost, srcDevice, ByteCount);
+  if (!cupti_runtime_api_flag) {
+    cupti_correlation_id_pop();
+  }
+  return error;
+}
+
 static void
 cupti_subscriber_callback
 (
@@ -787,6 +1023,7 @@ cupti_subscriber_callback
       cupti_enable_activities(rd->context);
     }
   } else if (domain == CUPTI_CB_DOMAIN_DRIVER_API) {
+    return;
     // stop flag is only set if a driver or runtime api called
     cupti_stop_flag_set();
     cupti_correlation_channel_init();
@@ -1097,6 +1334,7 @@ cupti_subscriber_callback
       case CUPTI_RUNTIME_TRACE_CBID_cudaMemcpyToSymbolAsync_ptsz_v7000:
       case CUPTI_RUNTIME_TRACE_CBID_cudaMemcpyFromSymbolAsync_ptsz_v7000:
         {
+          //is_valid_op = false;
           is_valid_op = true;
           break;
         }
@@ -1133,6 +1371,7 @@ cupti_subscriber_callback
         // Though unlikely in most cases,
         // it is still possible that a cupti buffer is full and returned to the host
         // in the interval of a runtime api.
+        #if 0
         cct_node_t *api_node = cupti_correlation_callback(correlation_id);
 
         gpu_driver_ccts_t gpu_driver_ccts;
@@ -1171,6 +1410,7 @@ cupti_subscriber_callback
           &gpu_driver_ccts);
 
         PRINT("Runtime push externalId %lu (cb_id = %u)\n", correlation_id, cb_id);
+#endif
       } else if (cd->callbackSite == CUPTI_API_EXIT) {
         // Exit an CUDA runtime api
         cupti_runtime_api_flag_unset();
@@ -1404,11 +1644,11 @@ cupti_callbacks_subscribe
                    (CUpti_CallbackFunc) cupti_subscriber_callback,
                    (void *) NULL));
 
-  HPCRUN_CUPTI_CALL(cuptiEnableDomain, 
-                   (1, cupti_subscriber, CUPTI_CB_DOMAIN_DRIVER_API));
+  //HPCRUN_CUPTI_CALL(cuptiEnableDomain, 
+  //                 (1, cupti_subscriber, CUPTI_CB_DOMAIN_DRIVER_API));
 
-  HPCRUN_CUPTI_CALL(cuptiEnableDomain, 
-                   (1, cupti_subscriber, CUPTI_CB_DOMAIN_RUNTIME_API));
+  //HPCRUN_CUPTI_CALL(cuptiEnableDomain, 
+  //                 (1, cupti_subscriber, CUPTI_CB_DOMAIN_RUNTIME_API));
 
   HPCRUN_CUPTI_CALL(cuptiEnableDomain, 
                    (1, cupti_subscriber, CUPTI_CB_DOMAIN_RESOURCE));
@@ -2145,6 +2385,7 @@ cupti_activity_flush
 void
 cupti_device_flush(void *args)
 {
+  fprintf(stderr, "cuda calls %llu\n", cupti_calls);
   if (cupti_stop_flag) {
     cupti_stop_flag_unset();
     cupti_activity_flush();
@@ -2168,21 +2409,21 @@ cupti_stop_flag_unset()
 }
 
 
-void
+inline void
 cupti_runtime_api_flag_unset()
 {
   cupti_runtime_api_flag = false;
 }
 
 
-void
+inline void
 cupti_runtime_api_flag_set()
 {
   cupti_runtime_api_flag = true;
 }
 
 
-void
+inline void
 cupti_correlation_id_push(uint64_t id)
 {
   HPCRUN_CUPTI_CALL(cuptiActivityPushExternalCorrelationId,
@@ -2190,7 +2431,7 @@ cupti_correlation_id_push(uint64_t id)
 }
 
 
-uint64_t
+inline uint64_t
 cupti_correlation_id_pop()
 {
   uint64_t id;
