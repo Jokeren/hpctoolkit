@@ -130,6 +130,7 @@
 
 #define HPCRUN_CUPTI_ACTIVITY_BUFFER_SIZE (16 * 1024 * 1024)
 #define HPCRUN_CUPTI_ACTIVITY_BUFFER_ALIGNMENT (8)
+#define HPCRUN_CUPTI_ACTIVITY_FLUSH_THRESHOLD 20
 
 #define CUPTI_FN_NAME(f) DYN_FN_NAME(f)
 
@@ -252,6 +253,7 @@ static spinlock_t files_lock = SPINLOCK_UNLOCKED;
 static __thread bool cupti_stop_flag = false;
 static __thread bool cupti_runtime_api_flag = false;
 static __thread cct_node_t *cupti_trace_node = NULL;
+static __thread uint64_t cupti_kernel_count = 0;
 
 static bool cupti_correlation_enabled = false;
 static bool cupti_pc_sampling_enabled = false;
@@ -697,7 +699,7 @@ cupti_correlation_callback_cuda
   PRINT("enter cupti_correlation_callback_cuda %u\n", correlation_id);
 
   hpcrun_metricVal_t zero_metric_incr = {.i = 0};
-  int zero_metric_id = 0; // nothing to see here
+  int zero_metric_id = -1; // nothing to see here
   ucontext_t uc;
   getcontext(&uc);
 
@@ -928,7 +930,10 @@ cupti_subscriber_callback
           is_valid_op = true;
           is_kernel_op = true;
           if (cd->callbackSite == CUPTI_API_ENTER) {
-            cupti_activity_channel_consume(cupti_activity_channel_get());
+            cupti_kernel_count++;
+            if (cupti_kernel_count % HPCRUN_CUPTI_ACTIVITY_FLUSH_THRESHOLD) {
+              cupti_activity_channel_consume(cupti_activity_channel_get());
+            }
             // XXX(Keren): cannot parse this kind of kernel launch
             //if (cb_id != CUPTI_DRIVER_TRACE_CBID_cuLaunchCooperativeKernelMultiDevice)
             // CUfunction is the first param
@@ -965,12 +970,6 @@ cupti_subscriber_callback
         } else if (is_copyout_op) {
           api_frm.ip_norm = gpu_driver_placeholders.gpu_copyout_state.pc_norm;
           gpu_driver_ccts.copyout_node = hpcrun_cct_insert_addr(api_node, &api_frm);
-        } else if (is_alloc_op) {
-          api_frm.ip_norm = gpu_driver_placeholders.gpu_alloc_state.pc_norm;
-          gpu_driver_ccts.alloc_node = hpcrun_cct_insert_addr(api_node, &api_frm);
-        } else if (is_delete_op) {
-          api_frm.ip_norm = gpu_driver_placeholders.gpu_delete_state.pc_norm;
-          gpu_driver_ccts.delete_node = hpcrun_cct_insert_addr(api_node, &api_frm);
         } else if (is_sync_op) {
           api_frm.ip_norm = gpu_driver_placeholders.gpu_sync_state.pc_norm;
           gpu_driver_ccts.sync_node = hpcrun_cct_insert_addr(api_node, &api_frm);
@@ -1149,10 +1148,6 @@ cupti_subscriber_callback
         api_frm.ip_norm = gpu_driver_placeholders.gpu_copyout_state.pc_norm;
         gpu_driver_ccts.copyout_node = hpcrun_cct_insert_addr(api_node, &api_frm);
         api_frm.ip_norm = gpu_driver_placeholders.gpu_alloc_state.pc_norm;
-        gpu_driver_ccts.alloc_node = hpcrun_cct_insert_addr(api_node, &api_frm);
-        api_frm.ip_norm = gpu_driver_placeholders.gpu_delete_state.pc_norm;
-        gpu_driver_ccts.delete_node = hpcrun_cct_insert_addr(api_node, &api_frm);
-        api_frm.ip_norm = gpu_driver_placeholders.gpu_trace_state.pc_norm;
         gpu_driver_ccts.trace_node = hpcrun_cct_insert_addr(api_node, &api_frm);
         api_frm.ip_norm = gpu_driver_placeholders.gpu_kernel_state.pc_norm;
         gpu_driver_ccts.kernel_node = hpcrun_cct_insert_addr(api_node, &api_frm);
