@@ -924,7 +924,7 @@ first_frame_above
   frame_t *it;
   for(it = start; it <= end; it++, (*index)++) {
     // FIXME: exit frame of current should be the same as enter_frame.ptr of previous frane
-    if (UINT64_T(it->cursor.sp) >= frame_address){
+    if (UINT64_T(it->sp) >= frame_address){
       return it;
     }
   }
@@ -951,7 +951,7 @@ first_frame_below
   it--;
   (*index)--;
 
-  if (frame_address > UINT64_T(it->cursor.sp)) {
+  if (frame_address > UINT64_T(it->sp)) {
     //printf("***********first_frame_below********Inside user code\n");
   } else if (frame_address == UINT64_T(it)) {
     // printf("***********first_frame_below********The same address\n");
@@ -1185,8 +1185,8 @@ provide_callpath_for_regions_if_needed
       return;
     }
     // this happened
-  } else if (UINT64_T(current_frame->enter_frame.ptr) <= UINT64_T(bt_inner->cursor.sp)
-             && UINT64_T(bt_inner->cursor.sp) <= UINT64_T(current_frame->exit_frame.ptr)) { // FIXME should put =
+  } else if (UINT64_T(current_frame->enter_frame.ptr) <= UINT64_T(bt_inner->sp)
+             && UINT64_T(bt_inner->sp) <= UINT64_T(current_frame->exit_frame.ptr)) { // FIXME should put =
     // thread take a simple in the region which is not the innermost
     // all innermost regions have been finished
 
@@ -1197,7 +1197,7 @@ provide_callpath_for_regions_if_needed
         return;
     }
     // this happened
-  } else if (UINT64_T(bt_inner->cursor.sp) < UINT64_T(current_frame->enter_frame.ptr)) {
+  } else if (UINT64_T(bt_inner->sp) < UINT64_T(current_frame->enter_frame.ptr)) {
     // take a sample inside the runtime
     return;
   } else if (UINT64_T(current_frame->enter_frame.ptr) == 0
@@ -1206,7 +1206,7 @@ provide_callpath_for_regions_if_needed
     // this happened
     return;
   } else if (UINT64_T(current_frame->exit_frame.ptr) == 0
-             && UINT64_T(bt_inner->cursor.sp) >= UINT64_T(current_frame->enter_frame.ptr)) {
+             && UINT64_T(bt_inner->sp) >= UINT64_T(current_frame->enter_frame.ptr)) {
 
     // FIXME vi3: this happened in the first region when master not took sample
 
@@ -1245,7 +1245,7 @@ provide_callpath_for_regions_if_needed
 
     // we should be inside the user code of the parent parallel region
     // but let's check that
-    if (UINT64_T(it->cursor.sp) >= UINT64_T(current_frame->enter_frame.ptr)) {
+    if (UINT64_T(it->sp) >= UINT64_T(current_frame->enter_frame.ptr)) {
       // this happened
 
     } else {
@@ -1346,8 +1346,8 @@ provide_callpath_for_end_of_the_region
         && UINT64_T(current_frame->exit_frame.ptr) != 0) {
         // thread take a sample inside user code of the parallel region
         // this region is the the innermost
-    } else if (UINT64_T(current_frame->enter_frame.ptr) <= UINT64_T(bt_inner->cursor.sp)
-               && UINT64_T(bt_inner->cursor.sp) <= UINT64_T(current_frame->exit_frame.ptr)) { // FIXME should put =
+    } else if (UINT64_T(current_frame->enter_frame.ptr) <= UINT64_T(bt_inner->sp)
+               && UINT64_T(bt_inner->sp) <= UINT64_T(current_frame->exit_frame.ptr)) { // FIXME should put =
         // thread take a simple in the region which is not the innermost
         // all innermost regions have been finished
 
@@ -1370,7 +1370,7 @@ provide_callpath_for_end_of_the_region
         ending_region->call_path = prefix;
 
 
-    } else if (UINT64_T(bt_inner->cursor.sp) < UINT64_T(current_frame->enter_frame.ptr)) {
+    } else if (UINT64_T(bt_inner->sp) < UINT64_T(current_frame->enter_frame.ptr)) {
         // take a sample inside the runtime
     } else if (UINT64_T(current_frame->enter_frame.ptr) == 0
                && UINT64_T(current_frame->exit_frame.ptr) == 0) {
@@ -1378,7 +1378,7 @@ provide_callpath_for_end_of_the_region
         // Note: this happens
 	deferred_resolution_breakpoint();
     } else if (UINT64_T(current_frame->exit_frame.ptr) == 0
-               && UINT64_T(bt_inner->cursor.sp) >= UINT64_T(current_frame->enter_frame.ptr)) {
+               && UINT64_T(bt_inner->sp) >= UINT64_T(current_frame->enter_frame.ptr)) {
 
         // FIXME vi3: this happened in the first region when master not took sample
 

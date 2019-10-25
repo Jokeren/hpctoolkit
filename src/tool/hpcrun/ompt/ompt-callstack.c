@@ -177,14 +177,13 @@ stack_dump
 {
   EMSG("-----%s start", tag); 
   for (frame_t* x = inner; x <= outer; ++x) {
-    void* ip;
-    hpcrun_unw_get_ip_unnorm_reg(&(x->cursor), &ip);
+    void* ip = x->pc_unnorm;
 
     load_module_t* lm = hpcrun_loadmap_findById(x->ip_norm.lm_id);
     const char* lm_name = (lm) ? lm->name : "(null)";
 
     EMSG("ip = %p (%p), sp = %p, load module = %s", 
-	 ip, x->ip_norm.lm_ip, x->cursor.sp, lm_name);
+	 ip, x->ip_norm.lm_ip, x->sp, lm_name);
   }
   EMSG("-----%s end", tag); 
   EMSG("<0x%lx>\n", region_id); 
@@ -249,7 +248,7 @@ set_frame
  ompt_placeholder_t *ph
 )
 {
-  f->cursor.pc_unnorm = ph->pc;
+  f->pc_unnorm = ph->pc;
   f->ip_norm = ph->pc_norm;
   f->the_function = ph->pc_norm;
 }
@@ -352,7 +351,7 @@ ompt_elide_runtime_frame(
 
   if (fp_exit(frame0) &&
       (((uint64_t) fp_exit(frame0)) <
-        ((uint64_t) (*bt_inner)->cursor.sp))) {
+        ((uint64_t) (*bt_inner)->sp))) {
     // corner case: the top frame has been set up, exit frame has been filled in; 
     // however, exit_frame.ptr points beyond the top of stack. the final call 
     // to user code hasn't been made yet. ignore this frame.
@@ -369,7 +368,7 @@ ompt_elide_runtime_frame(
     // elide frames from top of stack down to runtime entry
     int found = 0;
     for (it = *bt_inner; it <= *bt_outer; it++) {
-      if ((uint64_t)(it->cursor.sp) >= (uint64_t)fp_enter(frame0)) {
+      if ((uint64_t)(it->sp) >= (uint64_t)fp_enter(frame0)) {
         if (isSync) {
           // for synchronous samples, elide runtime frames at top of stack
           *bt_inner = it;
@@ -401,8 +400,8 @@ ompt_elide_runtime_frame(
     if (task_data)
       omp_task_context = task_data->ptr;
     
-    void *low_sp = (*bt_inner)->cursor.sp;
-    void *high_sp = (*bt_outer)->cursor.sp;
+    void *low_sp = (*bt_inner)->sp;
+    void *high_sp = (*bt_outer)->sp;
 
     // if a frame marker is inside the call stack, set its flag to true
     bool exit0_flag = 
@@ -419,7 +418,7 @@ ompt_elide_runtime_frame(
     it = *bt_inner; 
     if (exit0_flag) {
       for (; it <= *bt_outer; it++) {
-        if ((uint64_t)(it->cursor.sp) >= (uint64_t)(fp_exit(frame0))) {
+        if ((uint64_t)(it->sp) >= (uint64_t)(fp_exit(frame0))) {
           int offset = ff_is_appl(FF(frame0, exit)) ? 0 : 1;
           exit0 = it - offset;
           break;
@@ -463,7 +462,7 @@ ompt_elide_runtime_frame(
 
     if (reenter1_flag) {
       for (; it <= *bt_outer; it++) {
-        if ((uint64_t)(it->cursor.sp) >= (uint64_t)(fp_enter(frame1))) {
+        if ((uint64_t)(it->sp) >= (uint64_t)(fp_enter(frame1))) {
           reenter1 = it - 1;
           break;
         }
