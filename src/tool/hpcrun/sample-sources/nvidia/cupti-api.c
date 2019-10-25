@@ -189,7 +189,8 @@ typedef CUptiResult (*cupti_activity_enable_t)
 
 typedef cct_node_t *(*cupti_correlation_callback_t)
 (
- uint64_t id
+ uint64_t id,
+ bool ignore
 );
 
 
@@ -237,7 +238,8 @@ cupti_error_callback_dummy
 static cct_node_t *
 cupti_correlation_callback_dummy
 (
- uint64_t id
+ uint64_t id,
+ bool ignore
 );
 
 
@@ -252,6 +254,7 @@ static spinlock_t files_lock = SPINLOCK_UNLOCKED;
 
 static __thread bool cupti_stop_flag = false;
 static __thread bool cupti_runtime_api_flag = false;
+static __thread bool cupti_driver_api_flag = false;
 static __thread cct_node_t *cupti_trace_node = NULL;
 static __thread uint64_t cupti_kernel_count = 0;
 
@@ -550,7 +553,8 @@ cupti_bind
 static cct_node_t *
 cupti_correlation_callback_dummy // __attribute__((unused))
 (
- uint64_t id
+ uint64_t id,
+ bool ignore
 )
 {
   return NULL;
@@ -693,7 +697,8 @@ cupti_unload_callback_cuda
 static cct_node_t *
 cupti_correlation_callback_cuda
 (
- uint64_t correlation_id
+ uint64_t correlation_id,
+ bool ignore
 )
 {
   PRINT("enter cupti_correlation_callback_cuda %u\n", correlation_id);
@@ -733,11 +738,13 @@ cupti_correlation_callback_cuda
     node_addr = hpcrun_cct_addr(node);
   }
 
-  // Skip libcupti and libcuda
-  while (module_ignore_map_module_id_lookup(node_addr->ip_norm.lm_id)) {
-    //hpcrun_cct_delete_self(node);
-    node = hpcrun_cct_parent(node);
-    node_addr = hpcrun_cct_addr(node);
+  if (ignore) {
+    // Skip libcupti and libcuda
+    while (module_ignore_map_module_id_lookup(node_addr->ip_norm.lm_id)) {
+      //hpcrun_cct_delete_self(node);
+      node = hpcrun_cct_parent(node);
+      node_addr = hpcrun_cct_addr(node);
+    }
   }
 
   return node;
@@ -757,6 +764,229 @@ cupti_func_ip_resolve
   ip_normalized_t ip_norm = cubin_id_transform(cubin_id, function_index, 0);
   PRINT("Decode function_index %u cubin_id %u\n", function_index, cubin_id);
   return ip_norm;
+}
+
+
+cudaError_t 
+cudaLaunchKernel(const void* func, dim3 gridDim, dim3 blockDim, void** args, size_t sharedMem, cudaStream_t stream)
+{
+  // Enter a CUDA runtime api
+  cupti_runtime_api_flag_set();
+  uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+  cupti_correlation_id_push(correlation_id);
+  // We should make notification records in the api enter callback.
+  // A runtime API must be implemented by driver APIs.
+  // Though unlikely in most cases,
+  // it is still possible that a cupti buffer is full and returned to the host
+  // in the interval of a runtime api.
+  cct_node_t *api_node = cupti_correlation_callback(correlation_id, false);
+
+  gpu_driver_ccts_t gpu_driver_ccts;
+  memset(&gpu_driver_ccts, 0, sizeof(gpu_driver_ccts_t));
+  cct_addr_t api_frm;
+  memset(&api_frm, 0, sizeof(cct_addr_t));
+
+  hpcrun_safe_enter();
+
+  api_frm.ip_norm = gpu_driver_placeholders.gpu_copy_state.pc_norm;
+  gpu_driver_ccts.copy_node = hpcrun_cct_insert_addr(api_node, &api_frm);
+  api_frm.ip_norm = gpu_driver_placeholders.gpu_copyin_state.pc_norm;
+  gpu_driver_ccts.copyin_node = hpcrun_cct_insert_addr(api_node, &api_frm);
+  api_frm.ip_norm = gpu_driver_placeholders.gpu_copyout_state.pc_norm;
+  gpu_driver_ccts.copyout_node = hpcrun_cct_insert_addr(api_node, &api_frm);
+  api_frm.ip_norm = gpu_driver_placeholders.gpu_alloc_state.pc_norm;
+  gpu_driver_ccts.trace_node = hpcrun_cct_insert_addr(api_node, &api_frm);
+  api_frm.ip_norm = gpu_driver_placeholders.gpu_kernel_state.pc_norm;
+  gpu_driver_ccts.kernel_node = hpcrun_cct_insert_addr(api_node, &api_frm);
+  api_frm.ip_norm = gpu_driver_placeholders.gpu_sync_state.pc_norm;
+  gpu_driver_ccts.sync_node = hpcrun_cct_insert_addr(api_node, &api_frm);
+
+  hpcrun_safe_exit();
+
+  cupti_trace_node = gpu_driver_ccts.trace_node;
+
+  // Generate notification entry
+  cupti_correlation_channel_produce(
+    cupti_correlation_channel_get(),
+    correlation_id, 
+    cupti_activity_channel_get(),
+    &gpu_driver_ccts);
+
+  cudaError_t error = real_cudaLaunchKernel(func, gridDim, blockDim, args, sharedMem, stream);
+
+  cupti_correlation_id_pop();
+  cupti_runtime_api_flag_unset();
+  cupti_trace_node = NULL;
+  return error;
+}
+
+
+CUresult
+cuMemcpyDtoD
+(
+ CUdeviceptr dstDevice,
+ CUdeviceptr srcDevice,
+ size_t ByteCount
+) 
+{
+  if (!cupti_runtime_api_flag) {
+    cupti_driver_api_flag_set();
+    uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+    cupti_correlation_id_push(correlation_id);
+    cct_node_t *api_node = cupti_correlation_callback(correlation_id, false);
+
+    gpu_driver_ccts_t gpu_driver_ccts;
+    memset(&gpu_driver_ccts, 0, sizeof(gpu_driver_ccts));
+    cct_addr_t api_frm;
+    memset(&api_frm, 0, sizeof(cct_addr_t));
+
+    hpcrun_safe_enter();
+
+    api_frm.ip_norm = gpu_driver_placeholders.gpu_copy_state.pc_norm;
+    gpu_driver_ccts.copy_node = hpcrun_cct_insert_addr(api_node, &api_frm);
+
+    hpcrun_safe_exit();
+
+    // Generate notification entry
+    cupti_correlation_channel_produce(
+      cupti_correlation_channel_get(),
+      correlation_id, 
+      cupti_activity_channel_get(),
+      &gpu_driver_ccts);
+  }
+  //cct_node_t *api_node = cupti_correlation_callback(correlation_id);
+  cudaError_t error = real_cuMemcpyDtoD(dstDevice, srcDevice, ByteCount); 
+  if (!cupti_runtime_api_flag) {
+    cupti_driver_api_flag_unset();
+    cupti_correlation_id_pop();
+  }
+  return error;
+}
+
+
+CUresult
+cuMemcpyHtoD
+(
+ CUdeviceptr dstDevice,
+ const void* srcHost,
+ size_t ByteCount
+) 
+{
+  if (!cupti_runtime_api_flag) {
+    cupti_driver_api_flag_set();
+    uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+    cupti_correlation_id_push(correlation_id);
+    cct_node_t *api_node = cupti_correlation_callback(correlation_id, false);
+
+    gpu_driver_ccts_t gpu_driver_ccts;
+    memset(&gpu_driver_ccts, 0, sizeof(gpu_driver_ccts));
+    cct_addr_t api_frm;
+    memset(&api_frm, 0, sizeof(cct_addr_t));
+
+    hpcrun_safe_enter();
+
+    api_frm.ip_norm = gpu_driver_placeholders.gpu_copy_state.pc_norm;
+    gpu_driver_ccts.copyin_node = hpcrun_cct_insert_addr(api_node, &api_frm);
+
+    hpcrun_safe_exit();
+
+    // Generate notification entry
+    cupti_correlation_channel_produce(
+      cupti_correlation_channel_get(),
+      correlation_id, 
+      cupti_activity_channel_get(),
+      &gpu_driver_ccts);
+  }
+  cudaError_t error = real_cuMemcpyHtoD(dstDevice, srcHost, ByteCount); 
+  if (!cupti_runtime_api_flag) {
+    cupti_driver_api_flag_unset();
+    cupti_correlation_id_pop();
+  }
+  return error;
+}
+
+
+CUresult
+cuMemcpyDtoH
+(
+ void* dstHost,
+ CUdeviceptr srcDevice,
+ size_t ByteCount
+) 
+{
+  if (!cupti_runtime_api_flag) {
+    cupti_driver_api_flag_set();
+    uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+    cupti_correlation_id_push(correlation_id);
+    cct_node_t *api_node = cupti_correlation_callback(correlation_id, false);
+
+    gpu_driver_ccts_t gpu_driver_ccts;
+    memset(&gpu_driver_ccts, 0, sizeof(gpu_driver_ccts));
+    cct_addr_t api_frm;
+    memset(&api_frm, 0, sizeof(cct_addr_t));
+
+    hpcrun_safe_enter();
+
+    api_frm.ip_norm = gpu_driver_placeholders.gpu_copy_state.pc_norm;
+    gpu_driver_ccts.copyout_node = hpcrun_cct_insert_addr(api_node, &api_frm);
+
+    hpcrun_safe_exit();
+
+    // Generate notification entry
+    cupti_correlation_channel_produce(
+      cupti_correlation_channel_get(),
+      correlation_id, 
+      cupti_activity_channel_get(),
+      &gpu_driver_ccts);
+  }
+  cudaError_t error = real_cuMemcpyDtoH(dstHost, srcDevice, ByteCount);
+  if (!cupti_runtime_api_flag) {
+    cupti_driver_api_flag_unset();
+    cupti_correlation_id_pop();
+  }
+  return error;
+}
+
+
+CUresult
+cuMemcpy
+(
+ CUdeviceptr dst,
+ CUdeviceptr src,
+ size_t ByteCount
+)
+{
+  if (!cupti_runtime_api_flag) {
+    cupti_driver_api_flag_set();
+    uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+    cupti_correlation_id_push(correlation_id);
+    cct_node_t *api_node = cupti_correlation_callback(correlation_id, false);
+
+    gpu_driver_ccts_t gpu_driver_ccts;
+    memset(&gpu_driver_ccts, 0, sizeof(gpu_driver_ccts));
+    cct_addr_t api_frm;
+    memset(&api_frm, 0, sizeof(cct_addr_t));
+
+    hpcrun_safe_enter();
+
+    api_frm.ip_norm = gpu_driver_placeholders.gpu_copy_state.pc_norm;
+    gpu_driver_ccts.copyout_node = hpcrun_cct_insert_addr(api_node, &api_frm);
+
+    hpcrun_safe_exit();
+
+    // Generate notification entry
+    cupti_correlation_channel_produce(
+      cupti_correlation_channel_get(),
+      correlation_id, 
+      cupti_activity_channel_get(),
+      &gpu_driver_ccts);
+  }
+  cudaError_t error = real_cuMemcpy(dst, src, ByteCount);
+  if (!cupti_runtime_api_flag) {
+    cupti_driver_api_flag_unset();
+    cupti_correlation_id_pop();
+  }
+  return error;
 }
 
 
@@ -789,6 +1019,9 @@ cupti_subscriber_callback
       cupti_enable_activities(rd->context);
     }
   } else if (domain == CUPTI_CB_DOMAIN_DRIVER_API) {
+    if (cupti_driver_api_flag) {
+      return;
+    }
     // stop flag is only set if a driver or runtime api called
     cupti_stop_flag_set();
     cupti_correlation_channel_init();
@@ -952,7 +1185,7 @@ cupti_subscriber_callback
         // and unwind when the API is entered
         uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
         cupti_correlation_id_push(correlation_id);
-        cct_node_t *api_node = cupti_correlation_callback(correlation_id);
+        cct_node_t *api_node = cupti_correlation_callback(correlation_id, true);
 
         gpu_driver_ccts_t gpu_driver_ccts;
         memset(&gpu_driver_ccts, 0, sizeof(gpu_driver_ccts));
@@ -1020,6 +1253,10 @@ cupti_subscriber_callback
       }
     }
   } else if (domain == CUPTI_CB_DOMAIN_RUNTIME_API) {
+    if (cupti_runtime_api_flag) {
+      // handled by a cuda wrapper
+      return;
+    }
     // stop flag is only set if a driver or runtime api called
     cupti_stop_flag_set();
     cupti_correlation_channel_init();
@@ -1132,7 +1369,7 @@ cupti_subscriber_callback
         // Though unlikely in most cases,
         // it is still possible that a cupti buffer is full and returned to the host
         // in the interval of a runtime api.
-        cct_node_t *api_node = cupti_correlation_callback(correlation_id);
+        cct_node_t *api_node = cupti_correlation_callback(correlation_id, true);
 
         gpu_driver_ccts_t gpu_driver_ccts;
         memset(&gpu_driver_ccts, 0, sizeof(gpu_driver_ccts_t));
@@ -2174,6 +2411,20 @@ void inline
 cupti_runtime_api_flag_set()
 {
   cupti_runtime_api_flag = true;
+}
+
+
+void inline
+cupti_driver_api_flag_unset()
+{
+  cupti_driver_api_flag = false;
+}
+
+
+void inline
+cupti_driver_api_flag_set()
+{
+  cupti_driver_api_flag = true;
 }
 
 

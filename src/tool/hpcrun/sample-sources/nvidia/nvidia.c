@@ -979,6 +979,11 @@ METHOD_FN(process_event_list, int lush_metrics)
     monitor_real_exit(-1);
   }
 
+  if (cudart_bind()) {
+    EEMSG("hpcrun: unable to bind to NVIDIA CUDA Runtime library %s\n", dlerror());
+    monitor_real_exit(-1);
+  }
+
   if (cupti_bind()) {
     EEMSG("hpcrun: unable to bind to NVIDIA CUPTI library %s\n", dlerror());
     monitor_real_exit(-1);

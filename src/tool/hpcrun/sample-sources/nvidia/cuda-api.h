@@ -57,6 +57,9 @@
 #ifndef _HPCTOOLKIT_CUDA_API_H_
 #define _HPCTOOLKIT_CUDA_API_H_
 
+#include <cuda_runtime_api.h>
+#include <cuda.h>
+
 //*****************************************************************************
 // interface operations
 //*****************************************************************************
@@ -90,6 +93,46 @@ cuda_device_property_query
 (
  int device_id, 
  cuda_device_property_t *property
+);
+
+
+cudaError_t
+real_cudaLaunchKernel(const void* func, dim3 gridDim, dim3 blockDim, void** args, size_t sharedMem, cudaStream_t stream);
+
+
+CUresult
+real_cuMemcpyDtoH
+(
+ void* dstHost,
+ CUdeviceptr srcDevice,
+ size_t ByteCount
+); 
+
+
+CUresult
+real_cuMemcpyHtoD
+(
+ CUdeviceptr dstDevice,
+ const void* srcHost,
+ size_t ByteCount
+); 
+
+
+CUresult
+real_cuMemcpyDtoD
+(
+ CUdeviceptr dstDevice,
+ CUdeviceptr srcDevice,
+ size_t ByteCount
+); 
+
+
+CUresult
+real_cuMemcpy
+(
+ CUdeviceptr dst,
+ CUdeviceptr src,
+ size_t ByteCount
 );
 
 #endif

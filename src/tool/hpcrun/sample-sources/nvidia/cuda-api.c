@@ -88,6 +88,8 @@
 #define CUDA_FN(fn, args) \
   static CUresult (*CUDA_FN_NAME(fn)) args
 
+#define CUDART_FN(fn, args) \
+  static cudaError_t (*CUDA_FN_NAME(fn)) args
 
 #if CUDA_API_DEBUG
 #define PRINT(...) fprintf(stderr, __VA_ARGS__)
@@ -99,6 +101,16 @@
 {                                                                   \
   CUresult error_result = CUDA_FN_NAME(fn) args;		    \
   if (error_result != CUDA_SUCCESS) {				    \
+    PRINT("cuda api %s returned %d\n", #fn, (int) error_result);    \
+    exit(-1);							    \
+  }								    \
+}
+
+
+#define HPCRUN_CUDART_API_CALL(fn, args)                            \
+{                                                                   \
+  cudaError_t error_result = CUDA_FN_NAME(fn) args;		    \
+  if (error_result != cudaSuccess) {				    \
     PRINT("cuda api %s returned %d\n", #fn, (int) error_result);    \
     exit(-1);							    \
   }								    \
@@ -120,6 +132,64 @@ CUDA_FN
   CUdevice dev
  )
 );
+
+
+CUDA_FN
+(
+ cuMemcpy,
+ (
+  CUdeviceptr dst,
+  CUdeviceptr src,
+  size_t ByteCount
+ )
+);
+
+
+CUDA_FN
+(
+ cuMemcpyDtoD_v2,
+ (
+   CUdeviceptr dstDevice,
+   CUdeviceptr srcDevice,
+   size_t ByteCount
+ ) 
+);
+
+
+CUDA_FN
+(
+ cuMemcpyHtoD_v2,
+ (
+  CUdeviceptr dstDevice,
+  const void* srcHost,
+  size_t ByteCount
+ ) 
+);
+
+
+CUDA_FN
+(
+ cuMemcpyDtoH_v2,
+ (
+  void* dstHost,
+  CUdeviceptr srcDevice,
+  size_t ByteCount
+ ) 
+);
+
+
+CUDART_FN
+(
+ cudaLaunchKernel,
+ (
+  const void* func,
+  dim3 gridDim,
+  dim3 blockDim,
+  void** args,
+  size_t sharedMem,
+  cudaStream_t stream
+ )
+);
 #endif
 
 
@@ -138,6 +208,33 @@ cuda_bind
   CHK_DLOPEN(cuda, "libcuda.so", RTLD_NOW | RTLD_GLOBAL);
 
   CHK_DLSYM(cuda, cuDeviceGetAttribute); 
+
+  CHK_DLSYM(cuda, cuMemcpyDtoH_v2);
+
+  CHK_DLSYM(cuda, cuMemcpyDtoD_v2);
+
+  CHK_DLSYM(cuda, cuMemcpyHtoD_v2);
+
+  CHK_DLSYM(cuda, cuMemcpy);
+
+  return 0;
+#else
+  return -1;
+#endif // ! HPCRUN_STATIC_LINK
+}
+
+
+int 
+cudart_bind
+(
+ void
+)
+{
+#ifndef HPCRUN_STATIC_LINK
+  // dynamic libraries only availabile in non-static case
+  CHK_DLOPEN(cuda, "libcudart.so", RTLD_NOW | RTLD_GLOBAL);
+
+  CHK_DLSYM(cuda, cudaLaunchKernel); 
 
   return 0;
 #else
@@ -214,4 +311,74 @@ cuda_device_property_query
 #else
   return -1;
 #endif
+}
+
+
+cudaError_t
+real_cudaLaunchKernel(const void* func, dim3 gridDim, dim3 blockDim, void** args, size_t sharedMem, cudaStream_t stream)
+{
+#ifndef HPCRUN_STATIC_LINK
+  HPCRUN_CUDART_API_CALL(cudaLaunchKernel, (func, gridDim, blockDim, args, sharedMem, stream));
+#endif
+  return cudaSuccess;
+}
+
+
+CUresult
+real_cuMemcpyDtoD
+(
+ CUdeviceptr dstDevice,
+ CUdeviceptr srcDevice,
+ size_t ByteCount
+) 
+{
+#ifndef HPCRUN_STATIC_LINK
+  HPCRUN_CUDA_API_CALL(cuMemcpyDtoD_v2, (dstDevice, srcDevice, ByteCount));
+#endif
+  return CUDA_SUCCESS;
+}
+
+
+CUresult
+real_cuMemcpyHtoD
+(
+ CUdeviceptr dstDevice,
+ const void* srcHost,
+ size_t ByteCount
+) 
+{
+#ifndef HPCRUN_STATIC_LINK
+  HPCRUN_CUDA_API_CALL(cuMemcpyHtoD_v2, (dstDevice, srcHost, ByteCount));
+#endif
+  return CUDA_SUCCESS;
+}
+
+
+CUresult
+real_cuMemcpyDtoH
+(
+ void* dstHost,
+ CUdeviceptr srcDevice,
+ size_t ByteCount
+) 
+{
+#ifndef HPCRUN_STATIC_LINK
+  HPCRUN_CUDA_API_CALL(cuMemcpyDtoH_v2, (dstHost, srcDevice, ByteCount));
+#endif
+  return CUDA_SUCCESS;
+}
+
+
+CUresult
+real_cuMemcpy
+(
+ CUdeviceptr dst,
+ CUdeviceptr src,
+ size_t ByteCount
+)
+{
+#ifndef HPCRUN_STATIC_LINK
+  HPCRUN_CUDA_API_CALL(cuMemcpy, (dst, src, ByteCount));
+#endif
+  return CUDA_SUCCESS;
 }
