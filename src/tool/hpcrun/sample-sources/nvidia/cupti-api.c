@@ -2133,7 +2133,7 @@ cupti_activity_process
 // finalizer
 //******************************************************************************
 
-void
+void inline
 cupti_activity_flush
 (
 )
@@ -2142,7 +2142,7 @@ cupti_activity_flush
 }
 
 
-void
+void inline
 cupti_device_flush(void *args)
 {
   if (cupti_stop_flag) {
@@ -2154,35 +2154,35 @@ cupti_device_flush(void *args)
 }
 
 
-void
+void inline
 cupti_stop_flag_set()
 {
   cupti_stop_flag = true;
 }
 
 
-void
+void inline
 cupti_stop_flag_unset()
 {
   cupti_stop_flag = false;
 }
 
 
-void
+void inline
 cupti_runtime_api_flag_unset()
 {
   cupti_runtime_api_flag = false;
 }
 
 
-void
+void inline
 cupti_runtime_api_flag_set()
 {
   cupti_runtime_api_flag = true;
 }
 
 
-void
+void inline
 cupti_correlation_id_push(uint64_t id)
 {
   HPCRUN_CUPTI_CALL(cuptiActivityPushExternalCorrelationId,
@@ -2190,7 +2190,7 @@ cupti_correlation_id_push(uint64_t id)
 }
 
 
-uint64_t
+uint64_t inline
 cupti_correlation_id_pop()
 {
   uint64_t id;
@@ -2200,7 +2200,7 @@ cupti_correlation_id_pop()
 }
 
 
-void
+void inline
 cupti_device_shutdown(void *args)
 {
   cupti_callbacks_unsubscribe();
@@ -2209,14 +2209,14 @@ cupti_device_shutdown(void *args)
 }
 
 
-void
+void inline
 cupti_activity_handle(cupti_entry_activity_t *entry)
 {
   cupti_activity_attribute(&(entry->activity), entry->cct_node);
 }
 
 
-void
+void inline
 cupti_correlation_handle(cupti_entry_correlation_t *entry)
 {
   cupti_host_op_map_insert(entry->host_op_id,
