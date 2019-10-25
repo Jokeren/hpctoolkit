@@ -178,6 +178,25 @@ CUDA_FN
 );
 
 
+CUDA_FN
+(
+ cuLaunchKernel,
+ (
+  CUfunction f,
+  unsigned int gridDimX,
+  unsigned int gridDimY,
+  unsigned int gridDimZ,
+  unsigned int blockDimX,
+  unsigned int blockDimY,
+  unsigned int blockDimZ,
+  unsigned int sharedMemBytes,
+  CUstream hStream,
+  void** kernelParams,
+  void** extra
+ );
+);
+
+
 CUDART_FN
 (
  cudaLaunchKernel,
@@ -216,6 +235,8 @@ cuda_bind
   CHK_DLSYM(cuda, cuMemcpyHtoD_v2);
 
   CHK_DLSYM(cuda, cuMemcpy);
+
+  CHK_DLSYM(cuda, cuLaunchKernel);
 
   return 0;
 #else
@@ -379,6 +400,30 @@ real_cuMemcpy
 {
 #ifndef HPCRUN_STATIC_LINK
   HPCRUN_CUDA_API_CALL(cuMemcpy, (dst, src, ByteCount));
+#endif
+  return CUDA_SUCCESS;
+}
+
+
+CUresult
+real_cuLaunchKernel
+(
+ CUfunction f,
+ unsigned int gridDimX,
+ unsigned int gridDimY,
+ unsigned int gridDimZ,
+ unsigned int blockDimX,
+ unsigned int blockDimY,
+ unsigned int blockDimZ,
+ unsigned int sharedMemBytes,
+ CUstream hStream,
+ void** kernelParams,
+ void** extra
+)
+{
+#ifndef HPCRUN_STATIC_LINK
+  HPCRUN_CUDA_API_CALL(cuLaunchKernel, (f, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ,
+    sharedMemBytes, hStream, kernelParams, extra));
 #endif
   return CUDA_SUCCESS;
 }

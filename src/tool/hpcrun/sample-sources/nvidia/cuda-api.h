@@ -135,4 +135,21 @@ real_cuMemcpy
  size_t ByteCount
 );
 
+
+CUresult
+real_cuLaunchKernel
+(
+ CUfunction f,
+ unsigned int gridDimX,
+ unsigned int gridDimY,
+ unsigned int gridDimZ,
+ unsigned int blockDimX,
+ unsigned int blockDimY,
+ unsigned int blockDimZ,
+ unsigned int sharedMemBytes,
+ CUstream hStream,
+ void** kernelParams,
+ void** extra
+);
+
 #endif

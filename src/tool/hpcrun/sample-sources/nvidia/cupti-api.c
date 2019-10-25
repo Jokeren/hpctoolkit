@@ -794,7 +794,7 @@ cudaLaunchKernel(const void* func, dim3 gridDim, dim3 blockDim, void** args, siz
   gpu_driver_ccts.copyin_node = hpcrun_cct_insert_addr(api_node, &api_frm);
   api_frm.ip_norm = gpu_driver_placeholders.gpu_copyout_state.pc_norm;
   gpu_driver_ccts.copyout_node = hpcrun_cct_insert_addr(api_node, &api_frm);
-  api_frm.ip_norm = gpu_driver_placeholders.gpu_alloc_state.pc_norm;
+  api_frm.ip_norm = gpu_driver_placeholders.gpu_trace_state.pc_norm;
   gpu_driver_ccts.trace_node = hpcrun_cct_insert_addr(api_node, &api_frm);
   api_frm.ip_norm = gpu_driver_placeholders.gpu_kernel_state.pc_norm;
   gpu_driver_ccts.kernel_node = hpcrun_cct_insert_addr(api_node, &api_frm);
@@ -817,6 +817,81 @@ cudaLaunchKernel(const void* func, dim3 gridDim, dim3 blockDim, void** args, siz
   cupti_correlation_id_pop();
   cupti_runtime_api_flag_unset();
   cupti_trace_node = NULL;
+  return error;
+}
+
+
+CUresult
+cuLaunchKernel
+(
+ CUfunction f,
+ unsigned int gridDimX,
+ unsigned int gridDimY,
+ unsigned int gridDimZ,
+ unsigned int blockDimX,
+ unsigned int blockDimY,
+ unsigned int blockDimZ,
+ unsigned int sharedMemBytes,
+ CUstream hStream,
+ void** kernelParams,
+ void** extra
+)
+{
+  cupti_kernel_count++;
+  if (cupti_kernel_count % HPCRUN_CUPTI_ACTIVITY_FLUSH_THRESHOLD) {
+    cupti_activity_channel_consume(cupti_activity_channel_get());
+  }
+  ip_normalized_t func_ip = cupti_func_ip_resolve(f);
+
+  if (!cupti_runtime_api_flag) {
+    cupti_driver_api_flag_set();
+    uint64_t correlation_id = atomic_fetch_add(&cupti_correlation_id, 1);
+    cupti_correlation_id_push(correlation_id);
+    cct_node_t *api_node = cupti_correlation_callback(correlation_id, false);
+
+    gpu_driver_ccts_t gpu_driver_ccts;
+    memset(&gpu_driver_ccts, 0, sizeof(gpu_driver_ccts));
+    cct_addr_t api_frm;
+    memset(&api_frm, 0, sizeof(cct_addr_t));
+    cct_addr_t func_frm;
+    memset(&func_frm, 0, sizeof(cct_addr_t));
+
+    hpcrun_safe_enter();
+
+    api_frm.ip_norm = gpu_driver_placeholders.gpu_trace_state.pc_norm;
+    gpu_driver_ccts.trace_node = hpcrun_cct_insert_addr(api_node, &api_frm);
+    api_frm.ip_norm = gpu_driver_placeholders.gpu_kernel_state.pc_norm;
+    gpu_driver_ccts.kernel_node = hpcrun_cct_insert_addr(api_node, &api_frm);
+
+    func_frm.ip_norm = func_ip;
+    cct_node_t *cct_func = hpcrun_cct_insert_addr(gpu_driver_ccts.trace_node, &func_frm);
+    hpcrun_cct_retain(cct_func);
+
+    hpcrun_safe_exit();
+
+    // Generate notification entry
+    cupti_correlation_channel_produce(
+      cupti_correlation_channel_get(),
+      correlation_id, 
+      cupti_activity_channel_get(),
+      &gpu_driver_ccts);
+  } else {
+    if (cupti_trace_node != NULL) {
+      cct_addr_t func_frm;
+      memset(&func_frm, 0, sizeof(cct_addr_t));
+      func_frm.ip_norm = func_ip;
+      cct_node_t *cct_func = hpcrun_cct_insert_addr(cupti_trace_node, &func_frm);
+      hpcrun_cct_retain(cct_func);
+    }
+  }
+
+  CUresult error = real_cuLaunchKernel(f, gridDimX, gridDimY, gridDimZ, blockDimX, blockDimY, blockDimZ,
+    sharedMemBytes, hStream, kernelParams, extra);
+
+  if (!cupti_runtime_api_flag) {
+    cupti_driver_api_flag_unset();
+    cupti_correlation_id_pop();
+  }
   return error;
 }
 
