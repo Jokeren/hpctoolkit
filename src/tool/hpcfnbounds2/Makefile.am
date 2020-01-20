@@ -12,7 +12,7 @@
 ## HPCToolkit is at 'hpctoolkit.org' and in 'README.Acknowledgments'.
 ## --------------------------------------------------------------------------
 ##
-## Copyright ((c)) 2002-2019, Rice University
+## Copyright ((c)) 2002-2020, Rice University
 ## All rights reserved.
 ##
 ## Redistribution and use in source and binary forms, with or without
@@ -100,6 +100,8 @@ MYCPPFLAGS = $(HPC_IFLAGS) $(BOOST_IFLAGS) -I$(LIBELF_INC) -I$(LIBDWARF_INC) \
 
 MYCXXFLAGS = @HOST_CXXFLAGS@
 
+MYCFLAGS = @HOST_CFLAGS@
+
 MYLDADD = -L$(LIBELF_LIB) -lelf
 
 # MYLDADD = libeh_frames.a  \
@@ -138,6 +140,7 @@ pkglibexec_PROGRAMS = hpcfnbounds2
 
 hpcfnbounds2_SOURCES  = $(MYSOURCES)
 hpcfnbounds2_CPPFLAGS = $(MYCPPFLAGS)
+hpcfnbounds2_CFLAGS = $(MYCFLAGS)
 # hpcfnbounds_bin_CXXFLAGS = $(MYCXXFLAGS)
 hpcfnbounds2_LDADD    = $(MYLDADD)
 
